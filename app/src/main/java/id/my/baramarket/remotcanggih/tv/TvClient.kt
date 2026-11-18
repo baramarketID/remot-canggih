@@ -31,6 +31,9 @@ interface TvClient {
     fun launch(app: TvApp): Boolean
 
     fun close()
+
+    /** Info teknis untuk diagnosa. */
+    fun debug(): String = ""
 }
 
 /** Pembungkus untuk Android TV / Google TV. */
@@ -56,6 +59,8 @@ class AtvClient(private val r: AtvRemote) : TvClient {
     }
 
     override fun close() = r.close()
+
+    override fun debug(): String = "Android TV: " + r.debugInfo()
 }
 
 /** OkHttp yang menerima sertifikat self-signed TV (Samsung wss:8002, LG wss:3001). */

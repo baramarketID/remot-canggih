@@ -17,6 +17,7 @@ public final class AtvRemote {
 
     /** Bitmask fitur: PING 1 + KEY 2 + IME 4 + POWER 32 + VOLUME 64 + APP_LINK 512. */
     private static final int FEATURES = 615;
+    private static final int FEATURE_IME = 4;
 
     public static final int DIR_SHORT = 3;
 
@@ -49,7 +50,13 @@ public final class AtvRemote {
     private volatile boolean ready;
     private volatile int imeCounter;
     private volatile int fieldCounter;
-    private volatile boolean imeSeen;
+    private volatile boolean batchSeen;
+    /** Fitur yang didukung TV (dari remote_configure), -1 = belum diketahui. */
+    private volatile int tvFeatures = -1;
+    /** Fitur yang disepakati (milik kita ∩ milik TV). */
+    private volatile int active = FEATURES;
+    private volatile String currentApp;
+    private volatile boolean keyboardShown;
 
     public AtvRemote(AtvCert cert, String host, int port, String model, String vendor,
                      String appVersion, Listener listener) {
@@ -111,7 +118,13 @@ public final class AtvRemote {
     }
 
     private void handle(Proto.Msg m) throws IOException {
-        if (m.has(1)) { // remote_configure
+        if (m.has(1)) { // remote_configure: sepakati fitur bersama
+            Proto.Msg cfg = m.getMsg(1);
+            long tv = cfg == null ? 0 : cfg.getLong(1, 0);
+            if (tv > 0) {
+                tvFeatures = (int) tv;
+                active = FEATURES & (int) tv;
+            }
             Proto.Writer info = new Proto.Writer()
                     .string(1, model)
                     .string(2, vendor)
@@ -119,10 +132,10 @@ public final class AtvRemote {
                     .string(4, "1")
                     .string(5, "atvremote")
                     .string(6, appVersion);
-            send(new Proto.Writer().message(1, new Proto.Writer().varint(1, FEATURES).message(2, info)));
+            send(new Proto.Writer().message(1, new Proto.Writer().varint(1, active).message(2, info)));
         }
         if (m.has(2)) { // remote_set_active
-            send(new Proto.Writer().message(2, new Proto.Writer().varint(1, FEATURES)));
+            send(new Proto.Writer().message(2, new Proto.Writer().varint(1, active)));
             if (!ready) {
                 ready = true;
                 listener.onReady();
@@ -133,13 +146,28 @@ public final class AtvRemote {
             long v = ping == null ? 0 : ping.getLong(1, 0);
             send(new Proto.Writer().message(9, new Proto.Writer().varint(1, v)));
         }
-        if (m.has(21)) { // ime_batch_edit dari TV
+        if (m.has(20)) { // ime_key_inject: aplikasi aktif + status kolom teks
+            Proto.Msg k = m.getMsg(20);
+            if (k != null) {
+                Proto.Msg appInfo = k.getMsg(1);
+                if (appInfo != null && appInfo.getString(12) != null) currentApp = appInfo.getString(12);
+                Proto.Msg st = k.getMsg(2);
+                if (st != null && !batchSeen) fieldCounter = (int) st.getLong(1, fieldCounter);
+            }
+        }
+        if (m.has(21)) { // ime_batch_edit dari TV: nomor yang harus dipakai saat mengetik
             Proto.Msg b = m.getMsg(21);
             if (b != null) {
                 imeCounter = (int) b.getLong(1, imeCounter);
                 fieldCounter = (int) b.getLong(2, fieldCounter);
-                imeSeen = true;
+                batchSeen = true;
             }
+        }
+        if (m.has(22)) { // ime_show_request: keyboard TV sedang tampil
+            keyboardShown = true;
+            Proto.Msg r = m.getMsg(22);
+            Proto.Msg st = r == null ? null : r.getMsg(2);
+            if (st != null && !batchSeen) fieldCounter = (int) st.getLong(1, fieldCounter);
         }
         if (m.has(40)) { // remote_start
             Proto.Msg st = m.getMsg(40);
@@ -151,9 +179,18 @@ public final class AtvRemote {
         return ready && !closed;
     }
 
-    /** True bila TV sedang menampilkan kolom teks yang bisa diisi langsung. */
+    /** True bila TV mendukung pengetikan teks langsung (fitur IME). */
     public boolean canTypeDirectly() {
-        return imeSeen;
+        return tvFeatures < 0 || (active & FEATURE_IME) != 0;
+    }
+
+    /** Ringkasan untuk diagnosa di Setelan. */
+    public String debugInfo() {
+        return "fitur TV=" + tvFeatures + ", disepakati=" + active
+                + ", ketik langsung=" + (canTypeDirectly() ? "ya" : "tidak")
+                + ", kolom=" + imeCounter + "/" + fieldCounter + (batchSeen ? " (dari TV)" : "")
+                + ", keyboard TV=" + (keyboardShown ? "pernah tampil" : "belum")
+                + ", aplikasi=" + (currentApp == null ? "-" : currentApp);
     }
 
     public void sendKey(int keyCode) throws IOException {

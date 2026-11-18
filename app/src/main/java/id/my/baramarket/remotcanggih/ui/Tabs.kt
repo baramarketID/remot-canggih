@@ -464,6 +464,7 @@ fun SettingsTab(rc: RemoteController, actions: AppActions, onAddTv: () -> Unit) 
     val update by rc.update.collectAsState()
     var renaming by remember { mutableStateOf<TvDevice?>(null) }
     var confirmReset by remember { mutableStateOf(false) }
+    var showDebug by remember { mutableStateOf(false) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(sleepAt) {
         while (sleepAt > 0) {
@@ -619,6 +620,21 @@ fun SettingsTab(rc: RemoteController, actions: AppActions, onAddTv: () -> Unit) 
                     colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = c.accentInk),
                 ) { Text(if (update != null) "Download update" else "Halaman download", fontWeight = FontWeight.Bold) }
                 Spacer(Modifier.height(4.dp))
+                TextButton(onClick = { showDebug = !showDebug }) {
+                    Text(if (showDebug) "Sembunyikan info teknis" else "Info teknis koneksi", color = c.accent)
+                }
+                if (showDebug) {
+                    androidx.compose.foundation.text.selection.SelectionContainer {
+                        Text(
+                            rc.debugInfo(), color = c.muted, fontSize = 12.sp, lineHeight = 17.sp,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(c.surface2)
+                                .padding(12.dp),
+                        )
+                    }
+                }
                 TextButton(onClick = { confirmReset = true }) {
                     Text("Reset: lupakan semua TV", color = c.power)
                 }

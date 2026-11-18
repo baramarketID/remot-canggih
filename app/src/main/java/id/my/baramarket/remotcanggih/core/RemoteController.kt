@@ -373,6 +373,27 @@ class RemoteController private constructor(private val app: Context) {
 
     fun sendSpoken(text: String) = typeText("", text)
 
+    /** Info teknis koneksi (ditampilkan di Setelan untuk membantu mencari masalah). */
+    fun debugInfo(): String {
+        val c = client
+        val d = currentDevice
+        return buildString {
+            append("Status: ").append(
+                when (_conn.value) {
+                    is Conn.Connected -> "terhubung"
+                    is Conn.Connecting -> "menghubungkan"
+                    is Conn.Pairing -> "menunggu kode"
+                    is Conn.Approve -> "menunggu persetujuan"
+                    is Conn.Failed -> "terputus"
+                    Conn.Idle -> "belum ada TV"
+                }
+            )
+            if (d != null) append("\nTV: ").append(d.name).append(" (").append(d.kind).append(", ").append(d.host).append(")")
+            append("\nAplikasi: ").append(BuildConfig.VERSION_NAME)
+            if (c != null) append("\n").append(c.debug().ifEmpty { "Tersambung: " + c.ready })
+        }
+    }
+
     /** Untuk notifikasi/widget/timer: sambung dulu bila perlu, lalu kirim tombol. */
     suspend fun sendKeyNow(code: Int): Boolean {
         if (!ensureConnected()) return false
