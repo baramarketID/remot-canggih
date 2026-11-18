@@ -13,17 +13,23 @@ data class TvApp(
     val custom: Boolean = false,
     /** Paket aplikasi yang sama di HP, untuk menampilkan ikon aslinya bila terpasang. */
     val phonePkgs: List<String> = emptyList(),
+    /** ID aplikasi di TV Samsung (Tizen) dan LG (webOS); null = tidak tersedia. */
+    val samsungId: String? = null,
+    val lgId: String? = null,
 )
 
 val DEFAULT_APPS = listOf(
-    TvApp("youtube", "YouTube", "https://www.youtube.com", 0xFFE62117, phonePkgs = listOf("com.google.android.youtube")),
-    TvApp("netflix", "Netflix", "https://www.netflix.com/title", 0xFFB20710, phonePkgs = listOf("com.netflix.mediaclient")),
+    TvApp("youtube", "YouTube", "https://www.youtube.com", 0xFFE62117, phonePkgs = listOf("com.google.android.youtube"),
+        samsungId = "111299001912", lgId = "youtube.leanback.v4"),
+    TvApp("netflix", "Netflix", "https://www.netflix.com/title", 0xFFB20710, phonePkgs = listOf("com.netflix.mediaclient"),
+        samsungId = "3201907018807", lgId = "netflix"),
     TvApp("prime", "Prime Video", "https://app.primevideo.com", 0xFF0F79AF,
-        phonePkgs = listOf("com.amazon.avod.thirdpartyclient")),
+        phonePkgs = listOf("com.amazon.avod.thirdpartyclient"), samsungId = "3201910019365", lgId = "amazon"),
     TvApp("disney", "Disney+", "https://www.disneyplus.com", 0xFF0E2A7A,
-        phonePkgs = listOf("com.disney.disneyplus", "in.startv.hotstar.dplus", "in.startv.hotstar")),
+        phonePkgs = listOf("com.disney.disneyplus", "in.startv.hotstar.dplus", "in.startv.hotstar"),
+        samsungId = "3201901017640", lgId = "com.disney.disneyplus-prod"),
     TvApp("spotify", "Spotify", "market://launch?id=com.spotify.tv.android", 0xFF168D40,
-        phonePkgs = listOf("com.spotify.music")),
+        phonePkgs = listOf("com.spotify.music"), samsungId = "3201606009684", lgId = "spotify-beehive"),
     TvApp("vidio", "Vidio", "https://www.vidio.com", 0xFFC41E25, phonePkgs = listOf("com.vidio.android")),
     TvApp("viu", "Viu", "https://www.viu.com", 0xFFB88600, phonePkgs = listOf("com.vuclip.viu")),
     TvApp("wetv", "WeTV", "https://wetv.vip", 0xFFD35400, phonePkgs = listOf("com.tencent.qqlivei18n")),
@@ -69,8 +75,9 @@ class Prefs(context: Context) {
                 (0 until arr.length()).map {
                     val o = arr.getJSONObject(it)
                     val link = o.getString("link")
+                    val raw = link.substringAfter("market://launch?id=", "").ifEmpty { null }
                     TvApp(o.getString("id"), o.getString("name"), link, o.getLong("color"), true,
-                        listOfNotNull(link.substringAfter("market://launch?id=", "").ifEmpty { null }))
+                        listOfNotNull(raw), samsungId = raw, lgId = raw)
                 }
             } catch (e: Exception) {
                 emptyList()
@@ -92,6 +99,7 @@ class Prefs(context: Context) {
         val link = if (trimmed.contains("://")) trimmed else "market://launch?id=$trimmed"
         val color = CUSTOM_COLORS[(customApps.size) % CUSTOM_COLORS.size]
         val pkg = link.substringAfter("market://launch?id=", "").ifEmpty { null }
-        return TvApp("c" + System.currentTimeMillis(), name.trim(), link, color, true, listOfNotNull(pkg))
+        return TvApp("c" + System.currentTimeMillis(), name.trim(), link, color, true, listOfNotNull(pkg),
+            samsungId = pkg, lgId = pkg)
     }
 }

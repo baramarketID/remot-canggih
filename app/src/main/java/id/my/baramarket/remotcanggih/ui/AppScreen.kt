@@ -137,6 +137,8 @@ fun RemoteApp(rc: RemoteController, actions: AppActions) {
     }
     val pairing = conn as? Conn.Pairing
     if (pairing != null) PairingDialog(pairing, rc)
+    val approve = conn as? Conn.Approve
+    if (approve != null) ApproveDialog(approve, rc)
 }
 
 // ---------------------------------------------------------------------- header
@@ -244,6 +246,7 @@ private fun TvCard(rc: RemoteController, conn: Conn, onClick: () -> Unit) {
         is Conn.Connecting -> Triple(conn.device.name, "Menghubungkan…", c.warn)
         is Conn.Pairing -> Triple(conn.device.name, "Masukkan kode dari TV", c.warn)
         is Conn.Failed -> Triple(conn.device.name, "Terputus", c.power)
+        is Conn.Approve -> Triple(conn.device.name, "Setujui di TV", c.warn)
         Conn.Idle -> Triple("Belum ada TV", "Ketuk untuk mencari TV", c.faint)
     }
     val shape = RoundedCornerShape(18.dp)

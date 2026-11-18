@@ -166,7 +166,7 @@ fun DevicesSheet(rc: RemoteController, onDismiss: () -> Unit) {
                 ) { Icon(Icons.Rounded.Refresh, "Cari ulang", tint = c.ink) }
             }
         }
-        Text("HP dan TV harus terhubung ke WiFi yang sama.", color = c.muted, fontSize = 13.sp)
+        Text("Android TV / Google TV, Samsung, dan LG. HP dan TV harus satu WiFi.", color = c.muted, fontSize = 13.sp)
 
         Column(
             Modifier
@@ -187,7 +187,7 @@ fun DevicesSheet(rc: RemoteController, onDismiss: () -> Unit) {
                     color = c.muted, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp),
                 )
             }
-            fresh.forEach { d -> DeviceRow(d, d.host) { pick(d) } }
+            fresh.forEach { d -> DeviceRow(d, brandLabel(d.kind) + " · " + d.host) { pick(d) } }
 
             SectionLabel("Sambungkan manual (alamat IP TV)")
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -199,11 +199,11 @@ fun DevicesSheet(rc: RemoteController, onDismiss: () -> Unit) {
                     colors = fieldColors(),
                     shape = RoundedCornerShape(12.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Go),
-                    keyboardActions = KeyboardActions(onGo = { if (ip.count { it == '.' } == 3) pick(TvDevice("TV $ip", ip)) }),
+                    keyboardActions = KeyboardActions(onGo = { if (ip.count { it == '.' } == 3) pick(TvDevice("TV $ip", ip, kind = "")) }),
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(Modifier.width(10.dp))
-                AccentButton("Sambung", { pick(TvDevice("TV $ip", ip)) }, enabled = ip.count { it == '.' } == 3)
+                AccentButton("Sambung", { pick(TvDevice("TV $ip", ip, kind = "")) }, enabled = ip.count { it == '.' } == 3)
             }
             Text(
                 "IP TV ada di TV: Setelan → Jaringan → Status / Tentang.",
@@ -211,6 +211,12 @@ fun DevicesSheet(rc: RemoteController, onDismiss: () -> Unit) {
             )
         }
     }
+}
+
+private fun brandLabel(kind: String) = when (kind) {
+    "samsung" -> "Samsung"
+    "lg" -> "LG"
+    else -> "Android TV"
 }
 
 @Composable
@@ -297,6 +303,34 @@ fun PairingDialog(state: Conn.Pairing, rc: RemoteController) {
             }
         },
         confirmButton = { AccentButton("Sambungkan", { rc.submitCode(code) }, enabled = code.length == 6 && !state.busy) },
+        dismissButton = { TextButton(onClick = { rc.cancelPairing() }) { Text("Batal", color = c.ink) } },
+    )
+}
+
+/** Samsung / LG: minta pengguna menekan "Izinkan" di TV. */
+@Composable
+fun ApproveDialog(state: Conn.Approve, rc: RemoteController) {
+    val c = LocalColors.current
+    val brand = if (state.device.kind == "lg") "Terima" else "Izinkan"
+    AlertDialog(
+        onDismissRequest = {},
+        containerColor = c.surface,
+        title = { Text("Setujui di TV", fontWeight = FontWeight.Black, color = c.ink) },
+        text = {
+            Column {
+                Text(
+                    "Lihat layar ${state.device.name}, lalu pilih \"$brand\" dengan remot TV. Cukup sekali.",
+                    color = c.muted, fontSize = 14.sp,
+                )
+                Spacer(Modifier.height(14.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(Modifier.size(18.dp), color = c.accent, strokeWidth = 2.dp)
+                    Spacer(Modifier.width(10.dp))
+                    Text("Menunggu persetujuan…", color = c.muted, fontSize = 13.sp)
+                }
+            }
+        },
+        confirmButton = {},
         dismissButton = { TextButton(onClick = { rc.cancelPairing() }) { Text("Batal", color = c.ink) } },
     )
 }

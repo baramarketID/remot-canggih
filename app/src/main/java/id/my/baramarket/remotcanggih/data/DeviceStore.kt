@@ -8,6 +8,10 @@ data class TvDevice(
     val name: String,
     val host: String,
     val port: Int = 6466,
+    /** "atv", "samsung", "lg", atau "" bila belum diketahui (IP manual). */
+    val kind: String = "atv",
+    /** Token Samsung / client-key LG yang didapat setelah disetujui di TV. */
+    val secret: String? = null,
 )
 
 /** Menyimpan daftar TV yang pernah tersambung (di HP, tanpa akun/server). */
@@ -20,7 +24,10 @@ class DeviceStore(context: Context) {
             val arr = JSONArray(raw)
             (0 until arr.length()).map {
                 val o = arr.getJSONObject(it)
-                TvDevice(o.getString("name"), o.getString("host"), o.optInt("port", 6466))
+                TvDevice(
+                    o.getString("name"), o.getString("host"), o.optInt("port", 6466),
+                    o.optString("kind", "atv"), o.optString("secret", "").ifEmpty { null },
+                )
             }
         } catch (e: Exception) {
             emptyList()
@@ -31,7 +38,7 @@ class DeviceStore(context: Context) {
     fun save(device: TvDevice): TvDevice {
         val old = saved()
         val existing = old.firstOrNull { it.host == device.host }
-        val keep = if (existing != null) device.copy(name = existing.name) else device
+        val keep = if (existing != null) device.copy(name = existing.name, secret = device.secret ?: existing.secret) else device
         write(old.map { if (it.host == device.host) keep else it } + if (existing == null) listOf(keep) else emptyList())
         prefs.edit().putString("last", device.host).apply()
         return keep
@@ -58,7 +65,10 @@ class DeviceStore(context: Context) {
     private fun write(list: List<TvDevice>) {
         val arr = JSONArray()
         list.forEach {
-            arr.put(JSONObject().put("name", it.name).put("host", it.host).put("port", it.port))
+            arr.put(
+                JSONObject().put("name", it.name).put("host", it.host).put("port", it.port)
+                    .put("kind", it.kind).put("secret", it.secret ?: "")
+            )
         }
         prefs.edit().putString("devices", arr.toString()).apply()
     }

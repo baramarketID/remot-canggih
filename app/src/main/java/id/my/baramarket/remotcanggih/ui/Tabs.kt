@@ -360,7 +360,7 @@ fun AppsTab(rc: RemoteController, onAdd: () -> Unit) {
             modifier = Modifier.weight(1f),
         ) {
             itemsIndexed(apps, key = { _, a -> a.id }) { i, app ->
-                AppTile(app, i, editing, onOpen = { rc.openApp(app.link) }, onRemove = { rc.removeApp(app) })
+                AppTile(app, i, editing, onOpen = { rc.openApp(app) }, onRemove = { rc.removeApp(app) })
             }
             item(key = "tambah") {
                 AddTile(apps.size, onAdd)
@@ -368,7 +368,7 @@ fun AppsTab(rc: RemoteController, onAdd: () -> Unit) {
         }
         Text(
             if (editing) "Ketuk × untuk menyembunyikan. Aplikasi bawaan bisa dikembalikan di Setelan."
-            else "Aplikasi harus sudah terpasang di TV. Khusus Android TV / Google TV.",
+            else "Aplikasi harus sudah terpasang di TV.",
             color = c.muted, fontSize = 12.sp, textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()

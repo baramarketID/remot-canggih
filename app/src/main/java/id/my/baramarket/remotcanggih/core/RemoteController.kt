@@ -9,7 +9,11 @@ import id.my.baramarket.remotcanggih.BuildConfig
 import id.my.baramarket.remotcanggih.atv.AtvCert
 import id.my.baramarket.remotcanggih.atv.AtvPairing
 import id.my.baramarket.remotcanggih.atv.AtvRemote
-import id.my.baramarket.remotcanggih.atv.Keys
+import id.my.baramarket.remotcanggih.tv.AtvClient
+import id.my.baramarket.remotcanggih.tv.LgClient
+import id.my.baramarket.remotcanggih.tv.SamsungClient
+import id.my.baramarket.remotcanggih.tv.TvClient
+import id.my.baramarket.remotcanggih.tv.TvKind
 import id.my.baramarket.remotcanggih.data.DeviceStore
 import id.my.baramarket.remotcanggih.data.TvDevice
 import id.my.baramarket.remotcanggih.data.TvDiscovery
@@ -42,6 +46,9 @@ sealed interface Conn {
     /** TV sedang menampilkan kode; pengguna perlu mengetiknya. */
     data class Pairing(val device: TvDevice, val error: String? = null, val busy: Boolean = false) : Conn
     data class Failed(val device: TvDevice, val message: String) : Conn
+
+    /** Samsung / LG: TV sedang meminta persetujuan ("Izinkan"). */
+    data class Approve(val device: TvDevice) : Conn
 }
 
 /**
@@ -97,7 +104,7 @@ class RemoteController private constructor(private val app: Context) {
     private val _toast = MutableSharedFlow<String>(extraBufferCapacity = 4)
     val toast: SharedFlow<String> = _toast
 
-    private var remote: AtvRemote? = null
+    private var client: TvClient? = null
     private var pairing: AtvPairing? = null
     private var job: Job? = null
     private var started = false
@@ -117,11 +124,12 @@ class RemoteController private constructor(private val app: Context) {
             is Conn.Connected -> c.device
             is Conn.Pairing -> c.device
             is Conn.Failed -> c.device
+            is Conn.Approve -> c.device
             Conn.Idle -> null
         }
 
     val isConnected: Boolean
-        get() = _conn.value is Conn.Connected && remote?.isReady == true
+        get() = _conn.value is Conn.Connected && client?.ready == true
 
     // ------------------------------------------------------------------ koneksi
 
@@ -130,13 +138,75 @@ class RemoteController private constructor(private val app: Context) {
         closeAll()
         _conn.value = Conn.Connecting(device)
         job = scope.launch(Dispatchers.IO) {
-            try {
-                openRemote(device)
-            } catch (e: AtvRemote.NotPairedException) {
-                startPairing(device)
-            } catch (e: Exception) {
-                _conn.value = Conn.Failed(device, "Tidak bisa terhubung. Pastikan TV menyala dan satu WiFi dengan HP.")
+            val dev = if (device.kind.isEmpty()) detectKind(device) else device
+            if (dev == null) {
+                _conn.value = Conn.Failed(device, "TV tidak ditemukan di alamat itu, atau merk TV belum didukung.")
+                return@launch
             }
+            when (dev.kind) {
+                TvKind.SAMSUNG, TvKind.LG -> openWebSocketTv(dev)
+                else -> try {
+                    openRemote(dev)
+                } catch (e: AtvRemote.NotPairedException) {
+                    startPairing(dev)
+                } catch (e: Exception) {
+                    _conn.value = Conn.Failed(dev, "Tidak bisa terhubung. Pastikan TV menyala dan satu WiFi dengan HP.")
+                }
+            }
+        }
+    }
+
+    /** IP manual: tebak merk dari port yang terbuka. */
+    private fun detectKind(device: TvDevice): TvDevice? {
+        fun open(port: Int) = try {
+            java.net.Socket().use { it.connect(java.net.InetSocketAddress(device.host, port), 1500) }
+            true
+        } catch (e: Exception) {
+            false
+        }
+        return when {
+            open(AtvRemote.PORT) -> device.copy(kind = TvKind.ANDROID, port = AtvRemote.PORT)
+            open(8002) || open(8001) -> device.copy(kind = TvKind.SAMSUNG, name = "Samsung TV", port = 0)
+            open(3001) || open(3000) -> device.copy(kind = TvKind.LG, name = "LG TV", port = 0)
+            else -> null
+        }
+    }
+
+    /** Samsung / LG: sambung lewat WebSocket, simpan token/kunci dari TV. */
+    private fun openWebSocketTv(device: TvDevice) {
+        val saved = store.saved().firstOrNull { it.host == device.host }
+        val secret = device.secret ?: saved?.secret
+        val onClosed: (Exception?) -> Unit = {
+            scope.launch {
+                val c = _conn.value
+                if (c is Conn.Connected && c.device.host == device.host) {
+                    _conn.value = Conn.Failed(c.device, "Koneksi ke TV terputus.")
+                }
+            }
+        }
+        val onPrompt = { _conn.value = Conn.Approve(device) }
+        try {
+            val newSecret: String?
+            val tv: TvClient
+            if (device.kind == TvKind.SAMSUNG) {
+                val sc = SamsungClient(device.host, secret, onClosed)
+                newSecret = sc.connect(onPrompt)
+                tv = sc
+            } else {
+                val lc = LgClient(device.host, secret, onClosed)
+                newSecret = lc.connect(onPrompt)
+                tv = lc
+            }
+            client = tv
+            val kept = store.save(device.copy(secret = newSecret ?: secret))
+            _saved.value = store.saved()
+            _conn.value = Conn.Connected(kept)
+        } catch (e: SamsungClient.DeniedException) {
+            _conn.value = Conn.Failed(device, "Ditolak di TV. Coba lagi lalu pilih Izinkan.")
+        } catch (e: LgClient.DeniedException) {
+            _conn.value = Conn.Failed(device, "Ditolak di TV. Coba lagi lalu pilih Terima.")
+        } catch (e: Exception) {
+            _conn.value = Conn.Failed(device, "Tidak bisa terhubung ke TV. Pastikan TV menyala dan satu WiFi dengan HP.")
         }
     }
 
@@ -144,7 +214,7 @@ class RemoteController private constructor(private val app: Context) {
     fun reconnectIfNeeded() {
         val c = _conn.value
         if (c is Conn.Failed) connect(c.device)
-        else if (c is Conn.Connected && remote?.isReady != true) connect(c.device)
+        else if (c is Conn.Connected && client?.ready != true) connect(c.device)
         else if (c is Conn.Idle) store.last()?.let { connect(it) }
     }
 
@@ -158,7 +228,7 @@ class RemoteController private constructor(private val app: Context) {
             }
         }
         val result = withTimeoutOrNull(10_000) {
-            conn.first { it is Conn.Connected || it is Conn.Failed || it is Conn.Pairing || it is Conn.Idle }
+            conn.first { it is Conn.Connected || it is Conn.Failed || it is Conn.Pairing || it is Conn.Idle || it is Conn.Approve }
         }
         return result is Conn.Connected && isConnected
     }
@@ -185,7 +255,7 @@ class RemoteController private constructor(private val app: Context) {
                     }
                 }
             })
-        remote = r
+        client = AtvClient(r)
         r.connect()
         try {
             withTimeout(8000) { ready.await() }
@@ -268,17 +338,17 @@ class RemoteController private constructor(private val app: Context) {
     }
 
     private fun closeAll() {
-        remote?.close()
-        remote = null
+        client?.close()
+        client = null
         pairing?.close()
         pairing = null
     }
 
     // ------------------------------------------------------------------ perintah
 
-    private fun withRemote(block: (AtvRemote) -> Unit) {
-        val r = remote
-        if (r == null || !r.isReady || _conn.value !is Conn.Connected) {
+    private fun withRemote(block: (TvClient) -> Unit) {
+        val r = client
+        if (r == null || !r.ready || _conn.value !is Conn.Connected) {
             _toast.tryEmit("Belum terhubung ke TV")
             reconnectIfNeeded()
             return
@@ -292,31 +362,24 @@ class RemoteController private constructor(private val app: Context) {
         }
     }
 
-    fun key(code: Int) = withRemote { it.sendKey(code) }
+    fun key(code: Int) = withRemote { it.key(code) }
 
-    fun openApp(link: String) = withRemote { it.launchApp(link) }
+    fun openApp(app: TvApp) = withRemote {
+        if (!it.launch(app)) _toast.tryEmit("${app.name} belum tersedia untuk TV ini")
+    }
 
     /** Menyamakan isi kolom teks di TV dengan teks di HP. */
-    fun typeText(old: String, new: String) = withRemote { r ->
-        if (r.canTypeDirectly() && new.isNotEmpty()) {
-            r.sendText(new)
-        } else {
-            var p = 0
-            while (p < old.length && p < new.length && old[p] == new[p]) p++
-            repeat(old.length - p) { r.sendKey(Keys.DEL) }
-            new.substring(p).forEach { ch -> Keys.forChar(ch)?.let { r.sendKey(it) } }
-        }
-    }
+    fun typeText(old: String, new: String) = withRemote { it.text(old, new) }
 
     fun sendSpoken(text: String) = typeText("", text)
 
     /** Untuk notifikasi/widget/timer: sambung dulu bila perlu, lalu kirim tombol. */
     suspend fun sendKeyNow(code: Int): Boolean {
         if (!ensureConnected()) return false
-        val r = remote ?: return false
+        val r = client ?: return false
         return withContext(sender) {
             try {
-                r.sendKey(code)
+                r.key(code)
                 true
             } catch (e: Exception) {
                 false
