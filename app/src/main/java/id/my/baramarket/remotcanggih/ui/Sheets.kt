@@ -23,6 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Backspace
 import androidx.compose.material.icons.rounded.Cast
 import androidx.compose.material.icons.rounded.KeyboardReturn
+import androidx.compose.material.icons.rounded.PhotoLibrary
+import androidx.compose.material.icons.rounded.ScreenShare
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Tv
 import androidx.compose.material3.AlertDialog
@@ -51,6 +53,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -61,6 +64,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import id.my.baramarket.remotcanggih.atv.Keys
+import id.my.baramarket.remotcanggih.cast.CastManager
+import id.my.baramarket.remotcanggih.cast.MirrorService
 import id.my.baramarket.remotcanggih.core.Conn
 import id.my.baramarket.remotcanggih.core.RemoteController
 import id.my.baramarket.remotcanggih.data.TvDevice
@@ -427,8 +432,20 @@ fun AddAppDialog(rc: RemoteController, onDismiss: () -> Unit) {
 // ---------------------------------------------------------------------- cast
 
 @Composable
-fun CastSheet(onDismiss: () -> Unit, onOpenCast: () -> Unit) {
+fun CastSheet(onDismiss: () -> Unit, actions: AppActions) {
     val c = LocalColors.current
+    val ctx = LocalContext.current
+    val cast = remember { CastManager.get(ctx) }
+    val targets by cast.targets.collectAsState()
+    val connectedTo by cast.connectedTo.collectAsState()
+    val mirroring by cast.mirroring.collectAsState()
+    val status by cast.status.collectAsState()
+
+    DisposableEffect(Unit) {
+        cast.startDiscovery()
+        onDispose { cast.stopDiscovery() }
+    }
+
     Sheet(onDismiss) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -439,18 +456,98 @@ fun CastSheet(onDismiss: () -> Unit, onOpenCast: () -> Unit) {
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.Rounded.Cast, null, tint = c.accent) }
             Spacer(Modifier.width(12.dp))
-            Text("Mirror layar ke TV", color = c.ink, fontSize = 20.sp, fontWeight = FontWeight.Black)
+            Text("Cast & mirror", color = c.ink, fontSize = 20.sp, fontWeight = FontWeight.Black)
         }
-        Spacer(Modifier.height(12.dp))
-        Text(
-            "Mirror langsung dari aplikasi ini sedang disiapkan untuk update berikutnya.\n\n" +
-                "Sementara itu, pakai fitur cast bawaan HP. HP dan TV harus satu WiFi.",
-            color = c.muted, fontSize = 14.sp, lineHeight = 21.sp,
-        )
-        Spacer(Modifier.height(16.dp))
-        AccentButton("Buka cast bawaan HP", {
-            onOpenCast()
+
+        if (!cast.available) {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Fitur ini butuh Google Play Services, yang tidak ada di HP ini. Pakai fitur cast bawaan HP.",
+                color = c.muted, fontSize = 14.sp,
+            )
+            Spacer(Modifier.height(14.dp))
+            AccentButton("Buka cast bawaan HP", {
+                actions.onOpenCast()
+                onDismiss()
+            }, Modifier.fillMaxWidth())
+            return@Sheet
+        }
+
+        SectionLabel("TV dengan Chromecast")
+        if (targets.isEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 6.dp)) {
+                CircularProgressIndicator(Modifier.size(18.dp), color = c.accent, strokeWidth = 2.dp)
+                Spacer(Modifier.width(10.dp))
+                Text("Mencari… TV harus Android TV / Google TV dan satu WiFi.", color = c.muted, fontSize = 13.sp)
+            }
+        }
+        targets.forEach { t ->
+            val shape = RoundedCornerShape(14.dp)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                    .bouncyClick(onClickLabel = "Pilih ${t.name}") { if (!t.selected) cast.select(t.id) }
+                    .clip(shape)
+                    .background(if (t.selected) c.accentSoft else c.surface2)
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Rounded.Tv, null, tint = c.accent, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(12.dp))
+                Text(t.name, color = c.ink, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f),
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (t.selected) {
+                    Text("Putuskan", color = c.power, fontWeight = FontWeight.Bold, fontSize = 13.sp,
+                        modifier = Modifier
+                            .bouncyClick { cast.disconnect() }
+                            .padding(horizontal = 6.dp, vertical = 4.dp))
+                }
+            }
+        }
+
+        val ready = connectedTo != null
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (mirroring) {
+                Button(
+                    onClick = { MirrorService.stop(ctx) },
+                    modifier = Modifier.weight(1f).height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = c.power, contentColor = Color.White),
+                ) { Text("Hentikan mirror", fontWeight = FontWeight.Bold) }
+            } else {
+                Button(
+                    onClick = actions.onStartMirror, enabled = ready,
+                    modifier = Modifier.weight(1f).height(52.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = c.accentInk),
+                ) {
+                    Icon(Icons.Rounded.ScreenShare, null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Mirror layar", fontWeight = FontWeight.Bold)
+                }
+            }
+            Button(
+                onClick = actions.onPickMedia, enabled = ready,
+                modifier = Modifier.weight(1f).height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = c.surface2, contentColor = c.ink),
+            ) {
+                Icon(Icons.Rounded.PhotoLibrary, null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Foto / video", fontWeight = FontWeight.Bold)
+            }
+        }
+        val info = status ?: when {
+            !ready -> "Pilih TV di atas dulu."
+            mirroring -> "Sedang mirror. Ada jeda sekitar 3–5 detik; suara tetap keluar dari HP."
+            else -> "Mirror: pilih seluruh layar atau satu aplikasi (Android 14+). Foto/video dikirim dengan kualitas penuh."
+        }
+        Text(info, color = if (status != null) c.warn else c.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 12.dp))
+        TextButton(onClick = {
+            actions.onOpenCast()
             onDismiss()
-        }, Modifier.fillMaxWidth())
+        }) { Text("TV tidak muncul? Pakai cast bawaan HP", color = c.accent) }
     }
 }

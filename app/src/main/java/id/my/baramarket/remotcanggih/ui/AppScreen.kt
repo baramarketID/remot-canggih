@@ -74,6 +74,8 @@ class AppActions(
     val onOpenUrl: (String) -> Unit,
     val onEnableNotifControls: () -> Unit,
     val onPinWidget: () -> Unit,
+    val onStartMirror: () -> Unit,
+    val onPickMedia: () -> Unit,
 )
 
 const val DOWNLOAD_URL = "https://baramarket.my.id/remot/download"
@@ -129,7 +131,7 @@ fun RemoteApp(rc: RemoteController, actions: AppActions) {
         Panel.Devices -> DevicesSheet(rc, onDismiss = { panel = Panel.None })
         Panel.Keyboard -> KeyboardSheet(rc, onDismiss = { panel = Panel.None })
         Panel.Numpad -> NumpadSheet(rc, onDismiss = { panel = Panel.None })
-        Panel.Cast -> CastSheet(onDismiss = { panel = Panel.None }, onOpenCast = actions.onOpenCast)
+        Panel.Cast -> CastSheet(onDismiss = { panel = Panel.None }, actions = actions)
         Panel.AddApp -> AddAppDialog(rc, onDismiss = { panel = Panel.None })
         Panel.None -> {}
     }

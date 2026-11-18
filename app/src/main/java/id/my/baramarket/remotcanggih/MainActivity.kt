@@ -13,6 +13,8 @@ import android.provider.Settings
 import android.speech.RecognizerIntent
 import android.view.KeyEvent
 import android.widget.Toast
+import android.media.projection.MediaProjectionManager
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -24,6 +26,8 @@ import androidx.compose.runtime.getValue
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import id.my.baramarket.remotcanggih.atv.Keys
+import id.my.baramarket.remotcanggih.cast.CastManager
+import id.my.baramarket.remotcanggih.cast.MirrorService
 import id.my.baramarket.remotcanggih.core.RemoteController
 import id.my.baramarket.remotcanggih.core.RemoteWidget
 import id.my.baramarket.remotcanggih.ui.AppActions
@@ -49,6 +53,19 @@ class MainActivity : ComponentActivity() {
         else Toast.makeText(this, "Izinkan notifikasi supaya tombol remot bisa tampil", Toast.LENGTH_LONG).show()
     }
 
+    private val projection = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+        val data = res.data
+        if (res.resultCode == Activity.RESULT_OK && data != null) MirrorService.start(this, res.resultCode, data)
+        else Toast.makeText(this, "Mirror dibatalkan", Toast.LENGTH_SHORT).show()
+    }
+
+    private val pickMedia = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) lifecycleScope.launch {
+            val ok = CastManager.get(this@MainActivity).castFile(uri)
+            Toast.makeText(this@MainActivity, if (ok) "Dikirim ke TV" else "Gagal mengirim ke TV", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         rc.start()
@@ -58,6 +75,10 @@ class MainActivity : ComponentActivity() {
             onOpenUrl = ::openUrl,
             onEnableNotifControls = ::enableNotifControls,
             onPinWidget = ::pinWidget,
+            onStartMirror = ::startMirror,
+            onPickMedia = {
+                pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+            },
         )
         setContent {
             val dark by rc.dark.collectAsState()
@@ -103,6 +124,19 @@ class MainActivity : ComponentActivity() {
             speech.launch(intent)
         } catch (e: Exception) {
             Toast.makeText(this, "Fitur suara tidak tersedia di HP ini", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun startMirror() {
+        val mpm = getSystemService(MediaProjectionManager::class.java)
+        if (mpm == null) {
+            Toast.makeText(this, "Mirror tidak didukung di HP ini", Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            projection.launch(mpm.createScreenCaptureIntent())
+        } catch (e: Exception) {
+            Toast.makeText(this, "Mirror tidak didukung di HP ini", Toast.LENGTH_SHORT).show()
         }
     }
 
