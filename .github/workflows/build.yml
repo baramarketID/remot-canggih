@@ -30,10 +30,22 @@ jobs:
       - name: Siapkan kunci tanda tangan
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          RAW_STORE_PW: ${{ secrets.KEYSTORE_PASSWORD }}
+          RAW_ALIAS: ${{ secrets.KEY_ALIAS }}
+          RAW_KEY_PW: ${{ secrets.KEY_PASSWORD }}
         run: |
+          # Buang spasi / karakter tak terlihat yang sering ikut saat copy-paste.
+          clean() { v=$(printf '%s' "$1" | LC_ALL=C tr -cd '\041-\176'); printf '%s' "${v##*=}"; }
           if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            printf '%s' "$KEYSTORE_BASE64" | LC_ALL=C tr -cd 'A-Za-z0-9+/=' | base64 -d > "$RUNNER_TEMP/release.jks"
+            STORE_PW=$(clean "$RAW_STORE_PW"); ALIAS=$(clean "$RAW_ALIAS"); KEY_PW=$(clean "$RAW_KEY_PW")
+            echo "::add-mask::$STORE_PW"; echo "::add-mask::$KEY_PW"
+            {
+              echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks"
+              echo "KEYSTORE_PASSWORD=$STORE_PW"
+              echo "KEY_ALIAS=$ALIAS"
+              echo "KEY_PASSWORD=$KEY_PW"
+            } >> "$GITHUB_ENV"
             echo "Pakai kunci rilis."
           else
             echo "::warning::Secret KEYSTORE_BASE64 belum diisi, APK ditandatangani kunci debug."
@@ -41,9 +53,6 @@ jobs:
 
       - name: Build APK
         env:
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           BUILD_NUMBER: ${{ github.run_number }}
         run: gradle :app:assembleRelease --no-daemon --stacktrace
 
