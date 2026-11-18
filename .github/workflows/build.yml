@@ -40,6 +40,11 @@ jobs:
             printf '%s' "$KEYSTORE_BASE64" | LC_ALL=C tr -cd 'A-Za-z0-9+/=' | base64 -d > "$RUNNER_TEMP/release.jks"
             STORE_PW=$(clean "$RAW_STORE_PW"); ALIAS=$(clean "$RAW_ALIAS"); KEY_PW=$(clean "$RAW_KEY_PW")
             echo "::add-mask::$STORE_PW"; echo "::add-mask::$KEY_PW"
+            # Alias dibaca langsung dari file kunci (secret KEY_ALIAS hanya cadangan).
+            FOUND=$(keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$STORE_PW" 2>/dev/null | grep -i 'PrivateKeyEntry' | head -1 | cut -d, -f1)
+            if [ -n "$FOUND" ]; then ALIAS="$FOUND"; fi
+            [ -n "$KEY_PW" ] || KEY_PW="$STORE_PW"
+            echo "Alias kunci: $ALIAS"
             {
               echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks"
               echo "KEYSTORE_PASSWORD=$STORE_PW"
