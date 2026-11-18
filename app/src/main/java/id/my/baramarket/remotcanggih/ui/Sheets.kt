@@ -1,7 +1,6 @@
 package id.my.baramarket.remotcanggih.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,7 +22,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Backspace
 import androidx.compose.material.icons.rounded.Cast
-import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.KeyboardReturn
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Tv
@@ -32,12 +30,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -55,24 +51,30 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import id.my.baramarket.remotcanggih.BuildConfig
 import id.my.baramarket.remotcanggih.atv.Keys
+import id.my.baramarket.remotcanggih.core.Conn
+import id.my.baramarket.remotcanggih.core.RemoteController
 import id.my.baramarket.remotcanggih.data.TvDevice
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun Sheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    val c = LocalColors.current
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color(0xFF1A1D21),
+        containerColor = c.surface,
+        contentColor = c.ink,
+        scrimColor = Color(0x99000000),
     ) {
         Column(
             Modifier
@@ -87,106 +89,151 @@ private fun Sheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> 
 
 @Composable
 private fun SheetTitle(text: String) {
-    Text(text, color = Palette.Text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-    Spacer(Modifier.height(12.dp))
+    Text(text, color = LocalColors.current.ink, fontSize = 20.sp, fontWeight = FontWeight.Black)
+    Spacer(Modifier.height(10.dp))
 }
 
 @Composable
 private fun SectionLabel(text: String) {
-    Text(text, color = Palette.TextDim, fontSize = 13.sp, modifier = Modifier.padding(top = 14.dp, bottom = 6.dp))
+    val c = LocalColors.current
+    Text(
+        text.uppercase(), color = c.faint, fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp,
+        modifier = Modifier.padding(top = 16.dp, bottom = 6.dp),
+    )
+}
+
+@Composable
+private fun fieldColors() = LocalColors.current.let { c ->
+    OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = c.accent,
+        unfocusedBorderColor = c.keyLine,
+        cursorColor = c.accent,
+        focusedTextColor = c.ink,
+        unfocusedTextColor = c.ink,
+        focusedPlaceholderColor = c.faint,
+        unfocusedPlaceholderColor = c.faint,
+        focusedLabelColor = c.accent,
+        unfocusedLabelColor = c.muted,
+    )
+}
+
+@Composable
+private fun AccentButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    val c = LocalColors.current
+    Button(
+        onClick = onClick, enabled = enabled, modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = c.accent, contentColor = c.accentInk),
+    ) { Text(text, fontWeight = FontWeight.Bold) }
 }
 
 // ---------------------------------------------------------------------- pilih TV
 
 @Composable
-fun DevicesSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
-    val found by vm.discovery.devices.collectAsState()
-    val searching by vm.discovery.searching.collectAsState()
-    val saved by vm.saved.collectAsState()
+fun DevicesSheet(rc: RemoteController, onDismiss: () -> Unit) {
+    val c = LocalColors.current
+    val found by rc.discovery.devices.collectAsState()
+    val searching by rc.discovery.searching.collectAsState()
+    val saved by rc.saved.collectAsState()
     var ip by remember { mutableStateOf("") }
 
     DisposableEffect(Unit) {
-        vm.discovery.start()
-        onDispose { vm.discovery.stop() }
+        rc.discovery.start()
+        onDispose { rc.discovery.stop() }
     }
 
     fun pick(d: TvDevice) {
-        vm.connect(d)
+        rc.connect(d)
         onDismiss()
     }
 
     Sheet(onDismiss) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Pilih TV", color = Palette.Text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f))
+            Text("Pilih TV", color = c.ink, fontSize = 20.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
             if (searching) {
-                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                CircularProgressIndicator(Modifier.size(22.dp), color = c.accent, strokeWidth = 2.dp)
             } else {
-                IconButton(onClick = { vm.discovery.start() }) {
-                    Icon(Icons.Rounded.Refresh, "Cari ulang", tint = Palette.Text)
-                }
+                Box(
+                    Modifier
+                        .size(44.dp)
+                        .bouncyClick(onClickLabel = "Cari ulang", down = 0.9f) { rc.discovery.start() },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Rounded.Refresh, "Cari ulang", tint = c.ink) }
             }
         }
-        Text("HP dan TV harus terhubung ke WiFi yang sama.", color = Palette.TextDim, fontSize = 13.sp)
+        Text("HP dan TV harus terhubung ke WiFi yang sama.", color = c.muted, fontSize = 13.sp)
 
-        Column(Modifier.verticalScroll(rememberScrollState()).weight(1f, fill = false)) {
+        Column(
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .weight(1f, fill = false)
+        ) {
+            if (saved.isNotEmpty()) {
+                SectionLabel("TV kamu")
+                saved.forEach { d ->
+                    DeviceRow(d, if (found.any { it.host == d.host }) "Ada di WiFi ini" else d.host) { pick(d) }
+                }
+            }
             SectionLabel("Ditemukan di WiFi ini")
-            if (found.isEmpty()) {
+            val fresh = found.filter { f -> saved.none { it.host == f.host } }
+            if (fresh.isEmpty()) {
                 Text(
-                    if (searching) "Mencari TV…" else "Tidak ada TV ditemukan. Pastikan TV menyala.",
-                    color = Palette.TextDim, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp),
+                    if (searching) "Mencari TV…" else "Tidak ada TV baru. Pastikan TV menyala.",
+                    color = c.muted, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp),
                 )
             }
-            found.forEach { DeviceRow(it, onClick = { pick(it) }) }
-
-            val savedOnly = saved.filter { s -> found.none { it.host == s.host } }
-            if (savedOnly.isNotEmpty()) {
-                SectionLabel("Pernah tersambung")
-                savedOnly.forEach { DeviceRow(it, onClick = { pick(it) }) }
-            }
+            fresh.forEach { d -> DeviceRow(d, d.host) { pick(d) } }
 
             SectionLabel("Sambungkan manual (alamat IP TV)")
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = ip,
-                    onValueChange = { ip = it.filter { c -> c.isDigit() || c == '.' } },
+                    onValueChange = { ip = it.filter { ch -> ch.isDigit() || ch == '.' } },
                     placeholder = { Text("contoh: 192.168.1.20") },
                     singleLine = true,
+                    colors = fieldColors(),
+                    shape = RoundedCornerShape(12.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Go),
                     keyboardActions = KeyboardActions(onGo = { if (ip.count { it == '.' } == 3) pick(TvDevice("TV $ip", ip)) }),
                     modifier = Modifier.weight(1f),
                 )
                 Spacer(Modifier.width(10.dp))
-                Button(
-                    onClick = { pick(TvDevice("TV $ip", ip)) },
-                    enabled = ip.count { it == '.' } == 3,
-                ) { Text("Sambung") }
+                AccentButton("Sambung", { pick(TvDevice("TV $ip", ip)) }, enabled = ip.count { it == '.' } == 3)
             }
             Text(
-                "IP TV bisa dilihat di TV: Pengaturan → Jaringan / Tentang → Status.",
-                color = Palette.TextDim, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp),
+                "IP TV ada di TV: Setelan → Jaringan → Status / Tentang.",
+                color = c.faint, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp),
             )
         }
     }
 }
 
 @Composable
-private fun DeviceRow(d: TvDevice, onClick: () -> Unit) {
+private fun DeviceRow(d: TvDevice, subtitle: String, onClick: () -> Unit) {
+    val c = LocalColors.current
+    val shape = RoundedCornerShape(14.dp)
     Row(
         Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(Palette.Surface)
-            .clickable(onClick = onClick)
+            .bouncyClick(onClickLabel = "Sambungkan ${d.name}", onClick = onClick)
+            .clip(shape)
+            .background(c.surface2)
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.Tv, null, tint = Palette.BlueLight)
+        Box(
+            Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(c.accentSoft),
+            contentAlignment = Alignment.Center,
+        ) { Icon(Icons.Rounded.Tv, null, tint = c.accent, modifier = Modifier.size(20.dp)) }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(d.name, color = Palette.Text, fontSize = 16.sp)
-            Text(d.host, color = Palette.TextDim, fontSize = 12.sp)
+            Text(d.name, color = c.ink, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                overflow = TextOverflow.Ellipsis)
+            Text(subtitle, color = c.muted, fontSize = 12.sp)
         }
     }
 }
@@ -194,30 +241,34 @@ private fun DeviceRow(d: TvDevice, onClick: () -> Unit) {
 // ---------------------------------------------------------------------- pairing
 
 @Composable
-fun PairingDialog(state: Conn.Pairing, vm: RemoteViewModel) {
+fun PairingDialog(state: Conn.Pairing, rc: RemoteController) {
+    val c = LocalColors.current
     var code by remember(state.device.host) { mutableStateOf("") }
     LaunchedEffect(state.error) { if (state.error != null) code = "" }
     AlertDialog(
         onDismissRequest = {},
-        containerColor = Color(0xFF1A1D21),
-        title = { Text("Masukkan kode dari TV") },
+        containerColor = c.surface,
+        title = { Text("Masukkan kode dari TV", fontWeight = FontWeight.Black, color = c.ink) },
         text = {
             Column {
                 Text(
                     "Lihat layar ${state.device.name}. Ketik 6 karakter kode yang muncul di TV.",
-                    color = Palette.TextDim, fontSize = 14.sp,
+                    color = c.muted, fontSize = 14.sp,
                 )
                 Spacer(Modifier.height(14.dp))
                 OutlinedTextField(
                     value = code,
                     onValueChange = { v ->
                         code = v.uppercase().filter { it in "0123456789ABCDEF" }.take(6)
-                        if (code.length == 6) vm.submitCode(code)
+                        if (code.length == 6) rc.submitCode(code)
                     },
                     singleLine = true,
                     enabled = !state.busy,
-                    textStyle = androidx.compose.ui.text.TextStyle(
-                        fontSize = 26.sp, letterSpacing = 6.sp, textAlign = TextAlign.Center, color = Palette.Text,
+                    colors = fieldColors(),
+                    shape = RoundedCornerShape(12.dp),
+                    textStyle = TextStyle(
+                        fontSize = 26.sp, letterSpacing = 6.sp, textAlign = TextAlign.Center, color = c.ink,
+                        fontWeight = FontWeight.Black, fontFamily = Lato,
                     ),
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Characters,
@@ -228,29 +279,28 @@ fun PairingDialog(state: Conn.Pairing, vm: RemoteViewModel) {
                 )
                 if (state.error != null) {
                     Spacer(Modifier.height(8.dp))
-                    Text(state.error, color = Palette.Red, fontSize = 13.sp)
+                    Text(state.error, color = c.power, fontSize = 13.sp)
                 }
                 if (state.busy) {
                     Spacer(Modifier.height(10.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(Modifier.size(18.dp), color = c.accent, strokeWidth = 2.dp)
                         Spacer(Modifier.width(10.dp))
-                        Text("Menyambungkan…", color = Palette.TextDim, fontSize = 13.sp)
+                        Text("Menyambungkan…", color = c.muted, fontSize = 13.sp)
                     }
                 }
             }
         },
-        confirmButton = {
-            Button(onClick = { vm.submitCode(code) }, enabled = code.length == 6 && !state.busy) { Text("Sambungkan") }
-        },
-        dismissButton = { TextButton(onClick = { vm.cancelPairing() }) { Text("Batal") } },
+        confirmButton = { AccentButton("Sambungkan", { rc.submitCode(code) }, enabled = code.length == 6 && !state.busy) },
+        dismissButton = { TextButton(onClick = { rc.cancelPairing() }) { Text("Batal", color = c.ink) } },
     )
 }
 
 // ---------------------------------------------------------------------- keyboard
 
 @Composable
-fun KeyboardSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
+fun KeyboardSheet(rc: RemoteController, onDismiss: () -> Unit) {
+    val c = LocalColors.current
     var text by remember { mutableStateOf("") }
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
@@ -258,52 +308,38 @@ fun KeyboardSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
     fun update(new: String) {
         val old = text
         text = new
-        if (old != new) vm.typeText(old, new)
+        if (old != new) rc.typeText(old, new)
+    }
+
+    fun enter() {
+        rc.key(Keys.ENTER)
+        text = ""
     }
 
     Sheet(onDismiss) {
         SheetTitle("Ketik ke TV")
-        Text(
-            "Pilih kolom pencarian / teks di TV dulu, lalu ketik di sini.",
-            color = Palette.TextDim, fontSize = 13.sp,
-        )
+        Text("Pilih kolom pencarian / teks di TV dulu, lalu ketik di sini.", color = c.muted, fontSize = 13.sp)
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(
             value = text,
-            onValueChange = ::update,
+            onValueChange = { update(it) },
             placeholder = { Text("Ketik di sini…") },
             singleLine = true,
+            colors = fieldColors(),
+            shape = RoundedCornerShape(12.dp),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = {
-                vm.key(Keys.ENTER)
-                text = ""
-            }),
+            keyboardActions = KeyboardActions(onSearch = { enter() }),
             modifier = Modifier
                 .fillMaxWidth()
                 .focusRequester(focus),
         )
         Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(
-                onClick = { if (text.isNotEmpty()) update(text.dropLast(1)) else vm.key(Keys.DEL) },
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(Icons.Rounded.Backspace, null)
-                Spacer(Modifier.width(6.dp))
-                Text("Hapus")
-            }
-            OutlinedButton(onClick = { update("") }, modifier = Modifier.weight(1f)) { Text("Kosongkan") }
-            Button(
-                onClick = {
-                    vm.key(Keys.ENTER)
-                    text = ""
-                },
-                modifier = Modifier.weight(1f),
-            ) {
-                Icon(Icons.Rounded.KeyboardReturn, null)
-                Spacer(Modifier.width(6.dp))
-                Text("Enter")
-            }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Chip(Icons.Rounded.Backspace, "Hapus", { if (text.isNotEmpty()) update(text.dropLast(1)) else rc.key(Keys.DEL) },
+                Modifier.weight(1f), background = c.surface2)
+            Chip(null, "Kosongkan", { update("") }, Modifier.weight(1f), background = c.surface2)
+            Chip(Icons.Rounded.KeyboardReturn, "Enter", { enter() }, Modifier.weight(1f),
+                background = c.accent, tint = c.accentInk, border = null)
         }
     }
 }
@@ -311,132 +347,110 @@ fun KeyboardSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
 // ---------------------------------------------------------------------- angka
 
 @Composable
-fun NumpadSheet(vm: RemoteViewModel, onDismiss: () -> Unit) {
+fun NumpadSheet(rc: RemoteController, onDismiss: () -> Unit) {
+    val c = LocalColors.current
     val rows = listOf(
         listOf("1", "2", "3"),
         listOf("4", "5", "6"),
         listOf("7", "8", "9"),
         listOf("Menu", "0", "OK"),
     )
-    val haptic = rememberHaptic()
     Sheet(onDismiss) {
         SheetTitle("Tombol angka")
         rows.forEach { row ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 5.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 row.forEach { label ->
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .height(58.dp)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Palette.Surface)
-                            .clickable {
-                                haptic()
-                                when (label) {
-                                    "Menu" -> vm.key(Keys.MENU)
-                                    "OK" -> vm.key(Keys.OK)
-                                    else -> vm.key(Keys.number(label.toInt()))
-                                }
-                            },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(label, color = Palette.Text, fontSize = if (label.length > 1) 16.sp else 24.sp)
+                    val code = when (label) {
+                        "Menu" -> Keys.MENU
+                        "OK" -> Keys.OK
+                        else -> Keys.number(label.toInt())
                     }
+                    KeyButton(
+                        null, label, { rc.key(code) }, Modifier.weight(1f), size = 58.dp, width = 1000.dp,
+                        shape = RoundedCornerShape(14.dp), text = label,
+                        background = if (label == "OK") c.accent else c.surface2,
+                        tint = if (label == "OK") c.accentInk else c.ink,
+                    )
                 }
             }
         }
     }
 }
 
-// ---------------------------------------------------------------------- pengaturan
+// ---------------------------------------------------------------------- tambah aplikasi
 
 @Composable
-fun SettingsSheet(vm: RemoteViewModel, onDismiss: () -> Unit, onOpenUrl: (String) -> Unit) {
-    val saved by vm.saved.collectAsState()
-    val update by vm.update.collectAsState()
-    var confirmReset by remember { mutableStateOf(false) }
-
-    Sheet(onDismiss) {
-        SheetTitle("Pengaturan")
-        Text("Remot Canggih versi ${BuildConfig.VERSION_NAME}", color = Palette.Text, fontSize = 15.sp)
-        Text(
-            if (update != null) "Versi baru $update tersedia." else "Gratis, tanpa iklan, tanpa login.",
-            color = if (update != null) Palette.BlueLight else Palette.TextDim, fontSize = 13.sp,
-        )
-        Spacer(Modifier.height(10.dp))
-        Button(onClick = { onOpenUrl(DOWNLOAD_URL) }, modifier = Modifier.fillMaxWidth()) {
-            Text(if (update != null) "Download update" else "Buka halaman download")
-        }
-
-        SectionLabel("TV tersimpan")
-        if (saved.isEmpty()) Text("Belum ada.", color = Palette.TextDim, fontSize = 14.sp)
-        saved.forEach { d ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Palette.Surface)
-                    .padding(start = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(d.name, color = Palette.Text, fontSize = 15.sp)
-                    Text(d.host, color = Palette.TextDim, fontSize = 12.sp)
-                }
-                IconButton(onClick = { vm.forget(d) }) { Icon(Icons.Rounded.Delete, "Hapus", tint = Palette.TextDim) }
+fun AddAppDialog(rc: RemoteController, onDismiss: () -> Unit) {
+    val c = LocalColors.current
+    var name by remember { mutableStateOf("") }
+    var link by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = c.surface,
+        title = { Text("Tambah aplikasi", fontWeight = FontWeight.Black, color = c.ink) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it.take(30) }, singleLine = true,
+                    label = { Text("Nama") }, placeholder = { Text("mis. Kodi") },
+                    colors = fieldColors(), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = link, onValueChange = { link = it.trim() }, singleLine = true,
+                    label = { Text("Nama paket atau tautan") }, placeholder = { Text("mis. org.xbmc.kodi") },
+                    colors = fieldColors(), shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, autoCorrectEnabled = false),
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Nama paket ada di alamat halaman Play Store aplikasinya, setelah \"id=\".",
+                    color = c.muted, fontSize = 12.sp,
+                )
             }
-        }
-        Spacer(Modifier.height(10.dp))
-        HorizontalDivider(color = Palette.Border)
-        TextButton(onClick = { confirmReset = true }) {
-            Text("Reset: lupakan semua TV", color = Palette.Red)
-        }
-    }
-
-    if (confirmReset) {
-        AlertDialog(
-            onDismissRequest = { confirmReset = false },
-            title = { Text("Lupakan semua TV?") },
-            text = { Text("Semua TV harus disambungkan ulang dan memasukkan kode lagi.") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        vm.resetAll()
-                        confirmReset = false
-                        onDismiss()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Palette.Red),
-                ) { Text("Reset") }
-            },
-            dismissButton = { TextButton(onClick = { confirmReset = false }) { Text("Batal") } },
-        )
-    }
+        },
+        confirmButton = {
+            AccentButton("Tambah", {
+                rc.addApp(name, link)
+                onDismiss()
+            }, enabled = name.isNotBlank() && link.isNotBlank())
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Batal", color = c.ink) } },
+    )
 }
 
 // ---------------------------------------------------------------------- cast
 
 @Composable
 fun CastSheet(onDismiss: () -> Unit, onOpenCast: () -> Unit) {
+    val c = LocalColors.current
     Sheet(onDismiss) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.Cast, null, tint = Palette.BlueLight)
-            Spacer(Modifier.width(10.dp))
-            Text("Mirror layar ke TV", color = Palette.Text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Box(
+                Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(c.accentSoft),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Rounded.Cast, null, tint = c.accent) }
+            Spacer(Modifier.width(12.dp))
+            Text("Mirror layar ke TV", color = c.ink, fontSize = 20.sp, fontWeight = FontWeight.Black)
         }
         Spacer(Modifier.height(12.dp))
         Text(
-            "Mirror langsung dari aplikasi ini (pilih seluruh layar atau satu aplikasi) sedang disiapkan " +
-                "untuk update berikutnya.\n\nSementara itu, pakai fitur cast bawaan HP. HP dan TV harus satu WiFi.",
-            color = Palette.TextDim, fontSize = 14.sp, lineHeight = 21.sp,
+            "Mirror langsung dari aplikasi ini sedang disiapkan untuk update berikutnya.\n\n" +
+                "Sementara itu, pakai fitur cast bawaan HP. HP dan TV harus satu WiFi.",
+            color = c.muted, fontSize = 14.sp, lineHeight = 21.sp,
         )
         Spacer(Modifier.height(16.dp))
-        Button(
-            onClick = {
-                onOpenCast()
-                onDismiss()
-            },
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Buka cast bawaan HP") }
+        AccentButton("Buka cast bawaan HP", {
+            onOpenCast()
+            onDismiss()
+        }, Modifier.fillMaxWidth())
     }
 }

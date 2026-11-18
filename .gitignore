@@ -6,3 +6,4 @@ local.properties
 *.jks
 *.keystore
 *.p12
+app/src/main/res/font/lato_*.ttf

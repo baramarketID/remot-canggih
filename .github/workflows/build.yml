@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 17
@@ -26,6 +26,17 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.11.1"
+
+      - name: Unduh font Lato
+        run: |
+          mkdir -p app/src/main/res/font
+          for w in Regular Bold Black; do
+            f=$(echo "$w" | tr 'A-Z' 'a-z')
+            curl -fsSL --retry 4 --retry-delay 3 \
+              "https://raw.githubusercontent.com/google/fonts/main/ofl/lato/Lato-$w.ttf" \
+              -o "app/src/main/res/font/lato_$f.ttf"
+          done
+          ls -la app/src/main/res/font
 
       - name: Siapkan kunci tanda tangan
         env:

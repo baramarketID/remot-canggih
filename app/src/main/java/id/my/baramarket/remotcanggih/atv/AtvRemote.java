@@ -15,8 +15,8 @@ import javax.net.ssl.SSLSocket;
 public final class AtvRemote {
     public static final int PORT = 6466;
 
-    /** Bitmask fitur: ping, key, ime, power, volume, app link. */
-    private static final int FEATURES = 622;
+    /** Bitmask fitur: PING 1 + KEY 2 + IME 4 + POWER 32 + VOLUME 64 + APP_LINK 512. */
+    private static final int FEATURES = 615;
 
     public static final int DIR_SHORT = 3;
 
@@ -141,14 +141,6 @@ public final class AtvRemote {
                 imeSeen = true;
             }
         }
-        if (m.has(22)) { // ime_show_request
-            Proto.Msg r = m.getMsg(22);
-            Proto.Msg st = r == null ? null : r.getMsg(2);
-            if (st != null) {
-                fieldCounter = (int) st.getLong(1, fieldCounter);
-                imeSeen = true;
-            }
-        }
         if (m.has(40)) { // remote_start
             Proto.Msg st = m.getMsg(40);
             listener.onPowerChanged(st != null && st.getLong(1, 0) != 0);
@@ -174,6 +166,7 @@ public final class AtvRemote {
 
     /** Mengisi kolom teks di TV dengan teks lengkap (menggantikan isinya). */
     public void sendText(String text) throws IOException {
+        if (text.isEmpty()) return;
         int cursor = Math.max(0, text.length() - 1);
         Proto.Writer obj = new Proto.Writer().varint(1, cursor).varint(2, cursor).string(3, text);
         Proto.Writer edit = new Proto.Writer().varint(1, 1).message(2, obj);

@@ -27,10 +27,18 @@ class DeviceStore(context: Context) {
         }
     }
 
-    fun save(device: TvDevice) {
-        val list = saved().filterNot { it.host == device.host } + device
-        write(list)
+    /** Menyimpan TV; nama yang sudah diganti pengguna tetap dipakai. */
+    fun save(device: TvDevice): TvDevice {
+        val old = saved()
+        val existing = old.firstOrNull { it.host == device.host }
+        val keep = if (existing != null) device.copy(name = existing.name) else device
+        write(old.map { if (it.host == device.host) keep else it } + if (existing == null) listOf(keep) else emptyList())
         prefs.edit().putString("last", device.host).apply()
+        return keep
+    }
+
+    fun rename(host: String, name: String) {
+        write(saved().map { if (it.host == host) it.copy(name = name) else it })
     }
 
     fun remove(device: TvDevice) {

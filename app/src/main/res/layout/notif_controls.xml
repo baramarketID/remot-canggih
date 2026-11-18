@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+
+    <TextView android:id="@+id/n_title" style="@style/TextAppearance.Compat.Notification.Title"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:maxLines="1" android:ellipsize="end" />
+    <TextView android:id="@+id/n_sub" style="@style/TextAppearance.Compat.Notification"
+        android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:maxLines="1" android:ellipsize="end" />
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="44dp"
+        android:layout_marginTop="8dp" android:orientation="horizontal">
+        <ImageView android:id="@+id/n_power" android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:layout_marginEnd="6dp" android:background="@drawable/widget_power"
+            android:scaleType="center" android:src="@drawable/ic_w_power" android:contentDescription="Power" />
+        <ImageView android:id="@+id/n_voldown" android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:layout_marginEnd="6dp" android:background="@drawable/notif_key"
+            android:scaleType="center" android:src="@drawable/ic_w_minus" android:contentDescription="Volume turun" />
+        <ImageView android:id="@+id/n_mute" android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:layout_marginEnd="6dp" android:background="@drawable/notif_key"
+            android:scaleType="center" android:src="@drawable/ic_n_mute" android:contentDescription="Bisukan" />
+        <ImageView android:id="@+id/n_play" android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:layout_marginEnd="6dp" android:background="@drawable/widget_accent"
+            android:scaleType="center" android:src="@drawable/ic_w_play" android:contentDescription="Putar atau jeda" />
+        <ImageView android:id="@+id/n_volup" android:layout_width="0dp" android:layout_height="match_parent"
+            android:layout_weight="1" android:background="@drawable/notif_key"
+            android:scaleType="center" android:src="@drawable/ic_w_plus" android:contentDescription="Volume naik" />
+    </LinearLayout>
+</LinearLayout>
